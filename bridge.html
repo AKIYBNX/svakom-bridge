@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>🍊 Svakom Bridge</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0d0d1a;
+      color: #e0e0f0;
+      padding: 16px;
+      max-width: 420px;
+      margin: 0 auto;
+      min-height: 100vh;
+    }
+    h1 { font-size: 1.3em; color: #ff6b9d; margin-bottom: 16px; text-align: center; }
+    .card {
+      background: #1a1a2e;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid #2a2a4a;
+    }
+    .card h2 { font-size: 0.82em; color: #888; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+    label { font-size: 13px; color: #aaa; display: block; margin-bottom: 3px; }
+    input[type="url"], input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0d0d1a;
+      border: 1px solid #333366;
+      border-radius: 8px;
+      color: #e0e0f0;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    input:focus { outline: none; border-color: #ff6b9d; }
+    button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    button:active { opacity: 0.75; }
+    .btn-save { background: #252550; color: #99aacc; margin-bottom: 0; }
+    .btn-connect { background: linear-gradient(135deg, #ff6b9d, #c44dff); color: white; }
+    .btn-disconnect { background: #444; color: #ccc; }
+    .status-row { display: flex; align-items: center; padding: 8px 0; font-size: 13px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+    .dot-wait { background: #555; }
+    .dot-ok   { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
+    .dot-err  { background: #f44336; }
+    .dot-pulse { background: #ff6b9d; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .cmd-box {
+      background: #0d0d1a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #778;
+      margin-top: 8px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .bar-wrap { height: 5px; background: #222; border-radius: 3px; margin-top: 10px; overflow: hidden; }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff6b9d, #c44dff);
+      border-radius: 3px;
+      transition: width 0.4s;
+      width: 0%;
+    }
+  </style>
+</head>
+<body>
+<h1>🍊 Svakom Bridge</h1>
+
+<div class="card">
+  <h2>⚙️ 配置</h2>
+  <label>Railway 服务器地址</label>
+  <input type="url" id="serverUrl" placeholder="https://xxx.railway.app">
+  <label>API Key</label>
+  <input type="password" id="apiKey" placeholder="Railway 里设的 API_KEY">
+  <button class="btn-save" onclick="saveConfig()">💾 保存配置</button>
+</div>
+
+<div class="card">
+  <h2>🔵 蓝牙</h2>
+  <button class="btn-connect" id="bleBtn" onclick="toggleBLE()">连接分欣</button>
+  <div class="status-row">
+    <div class="dot dot-wait" id="bleDot"></div>
+    <span id="bleStatus">等待连接</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>📡 运行状态</h2>
+  <div class="status-row">
+    <div class="dot dot-wait" id="serverDot"></div>
+    <span id="serverStatus">未轮询</span>
+  </div>
+  <div class="cmd-box" id="cmdBox">等待命令...</div>
+  <div class="bar-wrap"><div class="bar-fill" id="bar"></div></div>
+</div>
+
+<script>
+let config = {
+  serverUrl: localStorage.getItem('sv_url') || '',
+  apiKey:    localStorage.getItem('sv_key') || ''
+};
+
+if (!config.serverUrl && location.hostname !== 'localhost') {
+  config.serverUrl = location.origin;
+}
+
+document.getElementById('serverUrl').value = config.serverUrl;
+document.getElementById('apiKey').value   = config.apiKey;
+
+function saveConfig() {
+  config.serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
+  config.apiKey    = document.getElementById('apiKey').value.trim();
+  localStorage.setItem('sv_url', config.serverUrl);
+  localStorage.setItem('sv_key', config.apiKey);
+  toast('✅ 已保存');
+}
+
+function toast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;z-index:9999;pointer-events:none';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+
+const SVC  = '0000ffe0-0000-1000-8000-00805f9b34fb';
+const CHAR = '0000ffe1-0000-1000-8000-00805f9b34fb';
+
+let bleChar = null;
+let connected = false;
+let pollTimer = null;
+let keepTimer = null;
+let lastTs = 0;
+let curState = null;
+
+async function toggleBLE() {
+  if (connected) { doDisconnect(); return; }
+  await doConnect();
+}
+
+async function doConnect() {
+  try {
+    setBle('pulse', '扫描中...');
+    const dev = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'SL278H' }],
+      optionalServices: [SVC]
+    });
+    dev.addEventListener('gattserverdisconnected', onDrop);
+    setBle('pulse', '连接中...');
+    const srv  = await dev.gatt.connect();
+    const svc  = await srv.getPrimaryService(SVC);
+    bleChar    = await svc.getCharacteristic(CHAR);
+    connected  = true;
+    setBle('ok', '✅ ' + dev.name);
+    document.getElementById('bleBtn').textContent = '断开蓝牙';
+    document.getElementById('bleBtn').className = 'btn-disconnect';
+    startLoops();
+  } catch(e) {
+    setBle('err', '❌ ' + e.message);
+  }
+}
+
+function onDrop() {
+  connected = false; bleChar = null;
+  stopLoops();
+  setBle('err', '🔴 蓝牙已断开');
+  document.getElementById('bleBtn').textContent = '重新连接分欣';
+  document.getElementById('bleBtn').className = 'btn-connect';
+}
+
+function doDisconnect() {
+  stopLoops();
+  try { bleChar?.service?.device?.gatt?.disconnect(); } catch(e){}
+}
+
+function startLoops() {
+  pollTimer = setInterval(pollServer, 300);
+  keepTimer = setInterval(keepalive, 1500);
+}
+function stopLoops() {
+  clearInterval(pollTimer);
+  clearInterval(keepTimer);
+}
+
+async function pollServer() {
+  if (!config.serverUrl || !config.apiKey) return;
+  try {
+    const r = await fetch(`${config.serverUrl}/poll?key=${encodeURIComponent(config.apiKey)}`);
+    if (!r.ok) { setSrv('err', '🔴 认证失败'); return; }
+    const d = await r.json();
+    setSrv('ok', '🟢 在线 · ' + new Date().toLocaleTimeString());
+    updateDisplay(d.state);
+    if (d.state && d.state.updatedAt !== lastTs) {
+      lastTs   = d.state.updatedAt;
+      curState = d.state;
+      await sendBLE(d.state);
+    }
+  } catch(e) {
+    setSrv('err', '🔴 服务器无响应');
+  }
+}
+
+async function keepalive() {
+  if (curState && connected) {
+    try { await sendBLE(curState); } catch(e){}
+  }
+}
+
+async function sendBLE(s) {
+  if (!bleChar || !connected) return;
+  let cmd;
+  if (s.type === 'stop' || s.intensity === 0) {
+    cmd = new Uint8Array([0x55, 0x04, 0x00, 0x00, 0x00, 0x00, 0xAA]);
+  } else if (s.type === 'pattern') {
+    cmd = new Uint8Array([0x55, 0x03, 0x00, 0x00, s.mode, s.level, 0x00]);
+  } else {
+    cmd = new Uint8Array([0x55, 0x04, 0x00, 0x00, 0x01, s.intensity, 0xAA]);
+  }
+  try {
+    await bleChar.writeValueWithoutResponse(cmd);
+  } catch(e) {
+    try { await bleChar.writeValue(cmd); } catch(e2){}
+  }
+}
+
+function setBle(type, msg) {
+  document.getElementById('bleDot').className = 'dot dot-' + type;
+  document.getElementById('bleStatus').textContent = msg;
+}
+function setSrv(type, msg) {
+  document.getElementById('serverDot').className = 'dot dot-' + type;
+  document.getElementById('serverStatus').textContent = msg;
+}
+function updateDisplay(s) {
+  if (!s) return;
+  let desc, pct;
+  if (s.type === 'stop' || s.intensity === 0) {
+    desc = '⏹ 停止'; pct = 0;
+  } else if (s.type === 'pattern') {
+    desc = `🌀 花样  mode=${s.mode}  level=${s.level}`;
+    pct = s.level / 5 * 100;
+  } else {
+    desc = `⚡ 强度  ${s.intensity}/255  (${Math.round(s.intensity/255*100)}%)`;
+    pct = s.intensity / 255 * 100;
+  }
+  document.getElementById('cmdBox').textContent = desc + '\n' + JSON.stringify(s, null, 2);
+  document.getElementById('bar').style.width = pct + '%';
+}
+</script>
+</body>
+</html>

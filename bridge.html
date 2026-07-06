@@ -226,6 +226,8 @@ async function sendBLE(s) {
   let cmd;
   if (s.type === 'pattern') {
     cmd = new Uint8Array([0x55, 0x03, 0x00, 0x00, s.mode, s.level, 0x00]);
+  } else if (s.type === 'stretch') {
+    cmd = new Uint8Array([0x55, 0x08, 0x00, 0x00, s.mode, s.level, 0x00]);
   } else if (s.type === 'stop' || s.intensity === 0) {
     cmd = new Uint8Array([0x55, 0x04, 0x00, 0x00, 0x00, 0x00, 0xAA]);
   } else {
@@ -254,6 +256,9 @@ function updateDisplay(s) {
   } else if (s.type === 'pattern') {
     desc = `🌀 花样  mode=${s.mode}  level=${s.level}`;
     pct = s.level / 5 * 100;
+  } else if (s.type === 'stretch') {
+    desc = `🔄 伸缩  mode=${s.mode}  level=${s.level}`;
+    pct = s.level / 10 * 100;
   } else {
     desc = `⚡ 强度  ${s.intensity}/255  (${Math.round(s.intensity/255*100)}%)`;
     pct = s.intensity / 255 * 100;

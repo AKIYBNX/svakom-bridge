@@ -224,8 +224,14 @@ async function keepalive() {
 async function sendBLE(s) {
   if (!bleChar || !connected) return;
   let cmd;
-  if (s.type === 'stop' || s.intensity === 0) {
+  if (s.type === 'pattern') {
+    cmd = new Uint8Array([0x55, 0x03, 0x00, 0x00, s.mode, s.level, 0x00]);
+} else if (s.type === 'stop' || s.intensity === 0) {
     cmd = new Uint8Array([0x55, 0x04, 0x00, 0x00, 0x00, 0x00, 0xAA]);
+} else {
+    cmd = new Uint8Array([0x55, 0x04, 0x00, 0x00, 0x01, s.intensity, 0xAA]);
+}
+
   } else if (s.type === 'pattern') {
     cmd = new Uint8Array([0x55, 0x03, 0x00, 0x00, s.mode, s.level, 0x00]);
   } else {

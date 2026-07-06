@@ -32,7 +32,7 @@ app.get('/command', (req, res) => {
     type: type || 'stop',
     intensity: Math.min(255, Math.max(0, parseInt(intensity) || 0)),
     mode: Math.min(8, Math.max(1, parseInt(mode) || 1)),
-    level: Math.min(5, Math.max(1, parseInt(level) || 1)),
+    level: Math.min(10, Math.max(1, parseInt(level) || 1)),
     updatedAt: Date.now()
   };
   console.log('[Command]', state);

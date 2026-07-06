@@ -157,7 +157,7 @@ async function doConnect() {
   try {
     setBle('pulse', '扫描中...');
     const dev = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'SL278H' }],
+      acceptAllDevices: true,
       optionalServices: [SVC]
     });
     dev.addEventListener('gattserverdisconnected', onDrop);

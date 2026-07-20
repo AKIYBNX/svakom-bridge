@@ -4,12 +4,12 @@ const path = require('path');
 
 const app = express();
 
-console.log('[BOOT VERSION] 2026-07-21-05');
+console.log('[BOOT VERSION] 2026-07-21-06');
 
 app.use(cors());
 app.use(express.json());
 
-// 所有请求都打印到 Railway 日志
+// Railway 运行日志
 app.use((req, res, next) => {
   console.log(
     '[INCOMING REQUEST]',
@@ -17,15 +17,20 @@ app.use((req, res, next) => {
     req.method,
     req.originalUrl
   );
+
   next();
 });
 
 const API_KEY = process.env.API_KEY || '';
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const BARK_KEY = process.env.BARK_KEY || '';
+const OPENROUTER_API_KEY =
+  process.env.OPENROUTER_API_KEY || '';
+
+const BARK_KEY =
+  process.env.BARK_KEY || '';
 
 const OPENROUTER_MODEL =
-  process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5';
+  process.env.OPENROUTER_MODEL ||
+  'anthropic/claude-haiku-4.5';
 
 const MEMORY_URL =
   'https://raw.githubusercontent.com/AKIYBNX/GAME-MAIL-STYLE/main/memory.txt';
@@ -40,11 +45,9 @@ let state = {
 
 function checkKey(req, res) {
   if (!API_KEY) {
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Railway 中没有设置 API_KEY'
     });
-
-    return false;
   }
 
   const key =
@@ -52,11 +55,9 @@ function checkKey(req, res) {
     req.query.key;
 
   if (key !== API_KEY) {
-    res.status(401).json({
+    return res.status(401).json({
       error: 'Unauthorized'
     });
-
-    return false;
   }
 
   return true;
@@ -65,24 +66,38 @@ function checkKey(req, res) {
 app.get('/command', (req, res) => {
   if (!checkKey(req, res)) return;
 
-  const { type, intensity, mode, level } = req.query;
+  const {
+    type,
+    intensity,
+    mode,
+    level
+  } = req.query;
 
   state = {
     type: type || 'stop',
 
     intensity: Math.min(
       255,
-      Math.max(0, Number.parseInt(intensity, 10) || 0)
+      Math.max(
+        0,
+        Number.parseInt(intensity, 10) || 0
+      )
     ),
 
     mode: Math.min(
       8,
-      Math.max(1, Number.parseInt(mode, 10) || 1)
+      Math.max(
+        1,
+        Number.parseInt(mode, 10) || 1
+      )
     ),
 
     level: Math.min(
       10,
-      Math.max(1, Number.parseInt(level, 10) || 1)
+      Math.max(
+        1,
+        Number.parseInt(level, 10) || 1
+      )
     ),
 
     updatedAt: Date.now()
@@ -102,12 +117,12 @@ app.get('/poll', (req, res) => {
   });
 });
 
-// 测试服务器是否在线，不需要密码
+// 服务器在线状态
 app.get('/health', (req, res) => {
   return res.json({
     ok: true,
     uptime: process.uptime(),
-    version: '2026-07-21-05'
+    version: '2026-07-21-06'
   });
 });
 
@@ -118,30 +133,16 @@ app.get('/bridge', (req, res) => {
 });
 
 // 健康报告接口
-// 排错期间暂时不检查 API_KEY
+// 此接口目前不检查 API_KEY
 app.get('/health-report', async (req, res) => {
-  console.log('[1] health-report entered');
+  console.log('[HEALTH REPORT] entered');
 
   const {
     steps,
     heart_rate,
     sleep,
-    period,
-    debug
+    period
   } = req.query;
-
-  const debugInfo = [];
-
-  function addDebug(step, details) {
-    console.log(`[${step}]`, details || '');
-
-    if (debug === '1') {
-      debugInfo.push({
-        step,
-        ...(details !== undefined ? { details } : {})
-      });
-    }
-  }
 
   const periodLabels = {
     morning: '早上',
@@ -194,22 +195,18 @@ app.get('/health-report', async (req, res) => {
     return res.status(400).json({
       error: '没有收到任何有效的健康数据',
       example:
-        '/health-report?steps=3200&heart_rate=80&sleep=7&period=morning&debug=1'
+        '/health-report?steps=3200&heart_rate=80&sleep=7&period=morning'
     });
   }
 
-  addDebug('2 data ready', dataLines);
-
-  addDebug('3 OpenRouter key check', {
-    exists: Boolean(OPENROUTER_API_KEY),
-    length: OPENROUTER_API_KEY.length
-  });
+  console.log(
+    '[HEALTH REPORT] data:',
+    dataLines
+  );
 
   let memory = '';
 
   try {
-    addDebug('4 fetching memory');
-
     const memoryResponse = await fetch(
       MEMORY_URL,
       {
@@ -225,16 +222,18 @@ app.get('/health-report', async (req, res) => {
 
     memory = await memoryResponse.text();
 
-    addDebug('5 memory fetched', {
-      length: memory.length
-    });
+    console.log(
+      '[MEMORY] loaded:',
+      memory.length
+    );
   } catch (error) {
+    console.error(
+      '[MEMORY ERROR]',
+      error.message
+    );
+
     memory =
       'あき是小橘重要的人，住在上海，喜欢宅家。';
-
-    addDebug('5 memory fallback', {
-      error: error.message
-    });
   }
 
   const prompt = `你是小橘，一只橘猫，以下是你的记忆：
@@ -270,9 +269,10 @@ ${dataLines.join('\n')}
       );
     }
 
-    addDebug('6 calling OpenRouter', {
-      model: OPENROUTER_MODEL
-    });
+    console.log(
+      '[OPENROUTER] calling:',
+      OPENROUTER_MODEL
+    );
 
     const openRouterResponse = await fetch(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -281,8 +281,10 @@ ${dataLines.join('\n')}
 
         headers: {
           'Content-Type': 'application/json',
+
           Authorization:
             `Bearer ${OPENROUTER_API_KEY}`,
+
           'X-Title': 'svakom-bridge'
         },
 
@@ -306,11 +308,10 @@ ${dataLines.join('\n')}
     const rawText =
       await openRouterResponse.text();
 
-    addDebug('7 OpenRouter response', {
-      status: openRouterResponse.status,
-      ok: openRouterResponse.ok,
-      preview: rawText.slice(0, 500)
-    });
+    console.log(
+      '[OPENROUTER] status:',
+      openRouterResponse.status
+    );
 
     if (!openRouterResponse.ok) {
       throw new Error(
@@ -323,9 +324,9 @@ ${dataLines.join('\n')}
     try {
       openRouterData =
         JSON.parse(rawText);
-    } catch (error) {
+    } catch {
       throw new Error(
-        `OpenRouter 返回的不是有效 JSON：${rawText.slice(0, 300)}`
+        `OpenRouter 返回了无效 JSON：${rawText.slice(0, 300)}`
       );
     }
 
@@ -341,18 +342,15 @@ ${dataLines.join('\n')}
 
     message = aiMessage;
 
-    addDebug('8 AI message ready', {
+    console.log(
+      '[OPENROUTER] AI message:',
       message
-    });
+    );
   } catch (error) {
     console.error(
-      '[OpenRouter Error]',
+      '[OPENROUTER ERROR]',
       error.message
     );
-
-    addDebug('OPENROUTER ERROR', {
-      error: error.message
-    });
   }
 
   let barkSent = false;
@@ -363,8 +361,6 @@ ${dataLines.join('\n')}
         'Railway 中没有设置 BARK_KEY'
       );
     }
-
-    addDebug('9 sending Bark');
 
     const barkUrl =
       `https://api.day.app/${encodeURIComponent(BARK_KEY)}` +
@@ -381,43 +377,31 @@ ${dataLines.join('\n')}
     const barkText =
       await barkResponse.text();
 
-    addDebug('10 Bark response', {
-      status: barkResponse.status,
-      ok: barkResponse.ok,
-      preview: barkText.slice(0, 200)
-    });
+    console.log(
+      '[BARK] status:',
+      barkResponse.status
+    );
 
     if (!barkResponse.ok) {
       throw new Error(
-        `Bark HTTP ${barkResponse.status}`
+        `Bark HTTP ${barkResponse.status}: ${barkText.slice(0, 300)}`
       );
     }
 
     barkSent = true;
   } catch (error) {
     console.error(
-      '[Bark Error]',
+      '[BARK ERROR]',
       error.message
     );
-
-    addDebug('BARK ERROR', {
-      error: error.message
-    });
   }
 
-  const result = {
+  return res.json({
     ok: true,
     message,
     data: dataLines,
-    barkSent,
-    debugVersion: '2026-07-21-05'
-  };
-
-  if (debug === '1') {
-    result.debug = debugInfo;
-  }
-
-  return res.json(result);
+    barkSent
+  });
 });
 
 const PORT =

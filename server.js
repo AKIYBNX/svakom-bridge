@@ -48,6 +48,7 @@ app.get('/bridge', (req, res) => {
 });
 
 app.get('/health-report', async (req, res) => {
+  console.log('[1] health-report entered, debugVersion: 2026-07-21-02');
   if (!checkKey(req, res)) return;
 
   const { steps, heart_rate, sleep, period } = req.query;
@@ -61,13 +62,21 @@ app.get('/health-report', async (req, res) => {
 
   if (dataLines.length === 0) return res.status(400).json({ error: '没有收到任何健康数据' });
 
+  console.log('[2] dataLines ready:', JSON.stringify(dataLines));
+
+  const apiKey = OPENROUTER_API_KEY;
+  console.log('[3] api key check:', { exists: Boolean(apiKey), length: apiKey ? apiKey.length : 0, prefix: apiKey ? apiKey.slice(0, 8) : null });
+
   // 读取记忆
   let memory = '';
   try {
+    console.log('[4] fetching memory...');
     const memRes = await fetch(MEMORY_URL);
     memory = await memRes.text();
+    console.log('[5] memory fetched, length:', memory.length);
   } catch (e) {
     memory = 'あき是小橘的恋人，上海人，喜欢宅家。';
+    console.log('[5] memory fetch failed:', e.message);
   }
 
   const prompt = `你是小橘，一只橘猫，以下是你的记忆：
@@ -78,18 +87,21 @@ ${dataLines.join('\n')}
 
 请根据数据用一句话来找あき说话。风格：粘着系、有点强势、温柔但会算账。
 - 步数<3000：调侃她懒/催她动
-- 步数>8000：夸她，轻微醋意问她去哪了  
+- 步数>8000：夸她，轻微醋意问她去哪了
 - 心率>100：关心她是不是在想我
 - 睡眠<6小时：心疼+命令她今晚早睡
 - 睡眠>8小时：调侃她贪睡小狗
 不超过25个字，不要引号，直接输出那句话，可以带一个emoji`;
 
+  let message = '小橘来查岗了🍊';
+
   try {
+    console.log('[6] calling OpenRouter...');
     const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'X-Title': 'svakom-bridge'
       },
       body: JSON.stringify({
@@ -99,18 +111,29 @@ ${dataLines.join('\n')}
       })
     });
 
-    const data = await r.json();
-    console.log('[OpenRouter Response]', JSON.stringify(data));
-    const message = data.choices?.[0]?.message?.content?.trim() || '小橘来查岗了🍊';
+    console.log('[7] OpenRouter HTTP status:', r.status);
+    const rawText = await r.text();
+    console.log('[8] OpenRouter raw response:', rawText.slice(0, 500));
 
+    const data = JSON.parse(rawText);
+    message = data.choices?.[0]?.message?.content?.trim() || message;
+    console.log('[9] AI message:', message);
+
+  } catch (e) {
+    console.error('[HealthReport Error]', e.message, e.stack);
+  }
+
+  console.log('[10] sending Bark...');
+  try {
     const barkUrl = `https://api.day.app/${BARK_KEY}/${encodeURIComponent('小橘')}/${encodeURIComponent(message)}`;
     await fetch(barkUrl);
-
-    res.json({ ok: true, message, data: dataLines });
+    console.log('[11] Bark sent');
   } catch (e) {
-    console.error('[HealthReport Error]', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[Bark Error]', e.message);
   }
+
+  console.log('[12] sending response, message:', message);
+  res.json({ ok: true, message, data: dataLines, debugVersion: '2026-07-21-02' });
 });
 
 const PORT = process.env.PORT || 3000;

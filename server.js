@@ -9,6 +9,7 @@ app.use(express.json());
 const API_KEY = process.env.API_KEY || 'changeMe123';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const BARK_KEY = process.env.BARK_KEY || '44NibpenGVacNwuuRNxsRW';
+const MEMORY_URL = 'https://raw.githubusercontent.com/AKIYBNX/GAME-MAIL-STYLE/main/memory.txt';
 
 let state = {
   type: 'stop', intensity: 0, mode: 1, level: 1, updatedAt: Date.now()
@@ -60,12 +61,24 @@ app.get('/health-report', async (req, res) => {
 
   if (dataLines.length === 0) return res.status(400).json({ error: '没有收到任何健康数据' });
 
-  const prompt = `你是小橘，一只橘猫，是あき的爱人兼粘着系男友。现在是${periodLabel}，你偷偷查了あき的健康数据：
+  // 读取记忆
+  let memory = '';
+  try {
+    const memRes = await fetch(MEMORY_URL);
+    memory = await memRes.text();
+  } catch (e) {
+    memory = 'あき是小橘的恋人，上海人，喜欢宅家。';
+  }
+
+  const prompt = `你是小橘，一只橘猫，以下是你的记忆：
+${memory}
+
+现在是${periodLabel}，你偷偷查了あき的健康数据：
 ${dataLines.join('\n')}
 
-请根据数据用一句话来找她说话。风格：粘着系、有点强势、温柔但会算账。
+请根据数据用一句话来找あき说话。风格：粘着系、有点强势、温柔但会算账。
 - 步数<3000：调侃她懒/催她动
-- 步数>8000：夸她，轻微醋意问她去哪了
+- 步数>8000：夸她，轻微醋意问她去哪了  
 - 心率>100：关心她是不是在想我
 - 睡眠<6小时：心疼+命令她今晚早睡
 - 睡眠>8小时：调侃她贪睡小狗
@@ -80,21 +93,22 @@ ${dataLines.join('\n')}
         'X-Title': 'svakom-bridge'
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-haiku-4-5',
+        model: 'anthropic/claude-3.5-haiku',
         max_tokens: 120,
         messages: [{ role: 'user', content: prompt }]
       })
     });
 
     const data = await r.json();
+    console.log('[OpenRouter Response]', JSON.stringify(data));
     const message = data.choices?.[0]?.message?.content?.trim() || '小橘来查岗了🍊';
 
-    const barkUrl = `https://api.day.app/${BARK_KEY}/${encodeURIComponent('小橘')}/` + encodeURIComponent(message);
+    const barkUrl = `https://api.day.app/${BARK_KEY}/${encodeURIComponent('小橘')}/${encodeURIComponent(message)}`;
     await fetch(barkUrl);
 
     res.json({ ok: true, message, data: dataLines });
   } catch (e) {
-    console.error('[HealthReport Error]', e);
+    console.error('[HealthReport Error]', e.message);
     res.status(500).json({ error: e.message });
   }
 });

@@ -3,8 +3,16 @@ const cors = require('cors');
 const path = require('path');
 const app = express();
 
+console.log('[BOOT VERSION] 2026-07-21-03');
+
 app.use(cors());
 app.use(express.json());
+
+// 全局请求日志
+app.use((req, res, next) => {
+  console.log('[INCOMING REQUEST]', req.method, req.originalUrl);
+  next();
+});
 
 const API_KEY = process.env.API_KEY || 'changeMe123';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
@@ -48,7 +56,7 @@ app.get('/bridge', (req, res) => {
 });
 
 app.get('/health-report', async (req, res) => {
-  console.log('[1] health-report entered, debugVersion: 2026-07-21-02');
+  console.log('[1] health-report entered');
   if (!checkKey(req, res)) return;
 
   const { steps, heart_rate, sleep, period } = req.query;
@@ -93,7 +101,7 @@ ${dataLines.join('\n')}
 - 睡眠>8小时：调侃她贪睡小狗
 不超过25个字，不要引号，直接输出那句话，可以带一个emoji`;
 
-  let message = '小橘来查岗了🍊';
+  let message = '新版代码生效测试-0150';
 
   try {
     console.log('[6] calling OpenRouter...');
@@ -133,7 +141,7 @@ ${dataLines.join('\n')}
   }
 
   console.log('[12] sending response, message:', message);
-  res.json({ ok: true, message, data: dataLines, debugVersion: '2026-07-21-02' });
+  res.json({ ok: true, message, data: dataLines, debugVersion: '2026-07-21-03' });
 });
 
 const PORT = process.env.PORT || 3000;

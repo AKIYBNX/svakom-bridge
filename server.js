@@ -93,7 +93,7 @@ ${dataLines.join('\n')}
         'X-Title': 'svakom-bridge'
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-3.5-haiku',
+        model: 'anthropic/claude-haiku-4.5',
         max_tokens: 120,
         messages: [{ role: 'user', content: prompt }]
       })
